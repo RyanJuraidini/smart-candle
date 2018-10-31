@@ -38,12 +38,15 @@ int main(void)
 	P2OUT &= ~BIT4;  // blue 2.4 off
 
 	TA0CCR0 = 1000;
-	TA0CCTL1 = OUTMOD_3;
+	TA0CCTL1 = OUTMOD_7;    // OUTMOD_7: reset/set (output set low when CCRx reached, high when CCR0 reached)
 	TA0CCR1 = 1000;
-	TA0CTL = TASSEL_2 + MC_1;
+	TA0CTL = TASSEL_2 + MC_1;   // TASSEL_2: use SMCLK (1MHz)
+	                            // MC_1: up mode (count until CCR0)
+
+	MC_0 + MC_1 + MC_2 + MC_3;
 
 	TA1CCR0 = 1000;
-	TA1CCTL1 = OUTMOD_3;
+	TA1CCTL1 = OUTMOD_7;
 	//TA1CCTL2 = OUTMOD_3;
 	TA1CCR1 = 1000;
 	//TA1CCR2 = 1000;
