@@ -19,11 +19,11 @@
 // flame color: red 5, green 90, blue 100
 
 /**
- * @param red_pwm = TA0CCR1 trigger value
- * @param green_pwm = TA1CCR1 trigger value
+ * @param red_percent = red led duty cycle
+ * @param green_percent = green led duty cycle
  * @return nothing
  */
-void flameColor(int red_pwm, int green_pwm);
+void flameColor(int red_percent, int green_percent);
 
 int main(void)
 {
@@ -43,8 +43,6 @@ int main(void)
 	TA0CTL = TASSEL_2 + MC_1;   // TASSEL_2: use SMCLK (1MHz)
 	                            // MC_1: up mode (count until CCR0)
 
-	MC_0 + MC_1 + MC_2 + MC_3;
-
 	TA1CCR0 = 1000;
 	TA1CCTL1 = OUTMOD_7;
 	//TA1CCTL2 = OUTMOD_3;
@@ -56,28 +54,33 @@ int main(void)
 	// map read values to pwm
 	// write pwm to LEDs
 
+	float power;
+	int red_duty = 95, green_duty = 5;
+	int rand_time, rand_on;
+
 	while(1)
 	{
 
-	    float power = (rand() % 200) + 800;     // generate random number from [0,20], shift to [80,100]
-	    int red_pwm, green_pwm;
-	    power = power / 1000;           // convert power to percent
+	    rand_time = (rand() % 100) + 400;   // 100 a little fast, try lower values
+	    rand_on = rand() % 4;
 
 	    // TODO: vary pwm based on random power level
 
-	    red_pwm = 50;
-	    green_pwm = 900;
+	    flameColor(red_duty, green_duty);
 
-	    flameColor(red_pwm, green_pwm);
+	    // turn off led for random amount of time for flicker??
+	    __delay_cycles(800);
 
-	    __delay_cycles(1000);
+	    if(rand_on > 2) flameColor(0, 0);
+
+	    while(rand_time--);
 	}
 
 	return 0;
 }
 
-void flameColor(int red_pwm, int green_pwm)
+void flameColor(int red_percent, int green_percent)
 {
-    TA0CCR1 = red_pwm;
-    TA1CCR1 = green_pwm;
+    TA0CCR1 = red_percent * 10;     // red_percent/100 * 1000
+    TA1CCR1 = green_percent * 10;   // green_percent/100 * 1000
 }
