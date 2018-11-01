@@ -15,6 +15,11 @@
 #include <msp430.h> 
 #include <stdlib.h>
 
+
+// increase MAX_RAND and LED_ON_FACTOR to make LED flicker slower
+#define MAX_RAND 10
+#define LED_ON_FACTOR 8
+
 // pwm = 0 on 100%, 100 on 0%
 // flame color: red 5, green 90, blue 100
 
@@ -60,20 +65,15 @@ int main(void)
 
 	while(1)
 	{
-
-	    rand_time = (rand() % 100) + 400;   // 100 a little fast, try lower values
-	    rand_on = rand() % 4;
+	    rand_on = rand() % MAX_RAND;  // increase mod value here to make flicker less
 
 	    // TODO: vary pwm based on random power level
 
 	    flameColor(red_duty, green_duty);
 
-	    // turn off led for random amount of time for flicker??
-	    __delay_cycles(800);
+	    if(rand_on > LED_ON_FACTOR) flameColor(0, 0);
 
-	    if(rand_on > 2) flameColor(0, 0);
-
-	    while(rand_time--);
+	    //while(rand_time--);
 	}
 
 	return 0;
