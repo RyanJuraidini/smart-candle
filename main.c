@@ -17,66 +17,71 @@
 
 
 // increase MAX_RAND and LED_ON_FACTOR to make LED flicker slower
-#define MAX_RAND 10
-#define LED_ON_FACTOR 8
+#define MAX_RAND 20
+#define LED_ON_FACTOR 18
 
 // pwm = 0 on 100%, 100 on 0%
 // flame color: red 5, green 90, blue 100
 
 /**
+ * @summary adjusts pwm wave of red and green pins of RGB
  * @param red_percent = red led duty cycle
  * @param green_percent = green led duty cycle
  * @return nothing
  */
 void flameColor(int red_percent, int green_percent);
 
+/**
+ * @summary initializes pwm pins and timer modules used to generate waves
+ * @param none
+ * @return none
+ */
+void pwmInit(void);
+
 int main(void)
 {
+    int red_duty = 95, green_duty = 5;
+    int rand_on;
+
 	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
 	
-	// set up port 1
-	P1DIR |= BIT2;
-	P1SEL |= BIT2;  // red 1.2 pwm
-	// set up port 2
-	P2DIR |= BIT1 + BIT4;
-	P2SEL |= BIT1;  // green 2.1 pwm
-	P2OUT &= ~BIT4;  // blue 2.4 off
-
-	TA0CCR0 = 1000;
-	TA0CCTL1 = OUTMOD_7;    // OUTMOD_7: reset/set (output set low when CCRx reached, high when CCR0 reached)
-	TA0CCR1 = 1000;
-	TA0CTL = TASSEL_2 + MC_1;   // TASSEL_2: use SMCLK (1MHz)
-	                            // MC_1: up mode (count until CCR0)
-
-	TA1CCR0 = 1000;
-	TA1CCTL1 = OUTMOD_7;
-	//TA1CCTL2 = OUTMOD_3;
-	TA1CCR1 = 1000;
-	//TA1CCR2 = 1000;
-	TA1CTL = TASSEL_2 + MC_1;
-
-	// read analog values
-	// map read values to pwm
-	// write pwm to LEDs
-
-	float power;
-	int red_duty = 95, green_duty = 5;
-	int rand_time, rand_on;
+	pwmInit();
 
 	while(1)
 	{
 	    rand_on = rand() % MAX_RAND;  // increase mod value here to make flicker less
 
-	    // TODO: vary pwm based on random power level
-
 	    flameColor(red_duty, green_duty);
 
 	    if(rand_on > LED_ON_FACTOR) flameColor(0, 0);
-
-	    //while(rand_time--);
 	}
 
 	return 0;
+}
+
+void pwmInit(void)
+{
+    // set up port 1
+    P1DIR |= BIT2;
+    P1SEL |= BIT2;  // red 1.2 pwm
+    // set up port 2
+    P2DIR |= BIT1 + BIT4;
+    P2SEL |= BIT1;  // green 2.1 pwm
+    P2OUT &= ~BIT4;  // blue 2.4 off
+
+    TA0CCR0 = 1000;
+    TA0CCTL1 = OUTMOD_7;    // OUTMOD_7: reset/set (output set low when CCRx reached, high when CCR0 reached)
+    TA0CCR1 = 1000;
+    TA0CTL = TASSEL_2 + MC_1;   // TASSEL_2: use SMCLK (1MHz)
+                                // MC_1: up mode (count until CCR0)
+
+    TA1CCR0 = 1000;
+    TA1CCTL1 = OUTMOD_7;
+    //TA1CCTL2 = OUTMOD_3;
+    TA1CCR1 = 1000;
+    //TA1CCR2 = 1000;
+    TA1CTL = TASSEL_2 + MC_1;
+
 }
 
 void flameColor(int red_percent, int green_percent)
