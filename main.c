@@ -13,6 +13,8 @@
 #include <msp430.h> 
 #include <stdlib.h>
 
+#define BUILT_IN_LED2 BIT6  // P1.6
+
 // RGB LED pins
 #define RED_LED     BIT2    // P1.2
 #define GREEN_LED   BIT1    // P2.1
@@ -40,6 +42,8 @@ void flameColor(int red_percent, int green_percent);
  */
 void pwmInit(void);
 
+volatile int interrupt_count = 0;
+
 int main(void)
 {
     int red_duty = 95, green_duty = 5;
@@ -47,6 +51,14 @@ int main(void)
 
 	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
 	
+	P1DIR |= BUILT_IN_LED2;
+
+	P1IE |= BIT0;               // enable interrupt from P1.0
+	P1IES |= BIT0;              // set flag on high-to-low transition
+	P1IFG &= ~BIT0;            // clear flag
+
+	__enable_interrupt();
+
 	pwmInit();
 
 	while(1)
@@ -90,4 +102,16 @@ void flameColor(int red_percent, int green_percent)
 {
     TA0CCR1 = red_percent * 10;     // red_percent/100 * 1000
     TA1CCR1 = green_percent * 10;   // green_percent/100 * 1000
+}
+
+#pragma vector=PORT1_VECTOR
+__interrupt void Port_1(void)
+{
+    // TODO: ISR not being run... interrupt not thrown? Check voltages, may be outside logic level
+    // LED would toggle (ISR would run) when probing pins with multimeter
+
+    interrupt_count++;
+
+    P1OUT ^= BUILT_IN_LED2;
+    P1IFG &= ~BIT0;
 }
