@@ -9,21 +9,27 @@ CMD_SRCS += \
 ../lnk_msp430g2553.cmd 
 
 C_SRCS += \
-../main.c 
+../main.c \
+../tiny_printf.c 
 
 C_DEPS += \
-./main.d 
+./main.d \
+./tiny_printf.d 
 
 OBJS += \
-./main.obj 
+./main.obj \
+./tiny_printf.obj 
 
 OBJS__QUOTED += \
-"main.obj" 
+"main.obj" \
+"tiny_printf.obj" 
 
 C_DEPS__QUOTED += \
-"main.d" 
+"main.d" \
+"tiny_printf.d" 
 
 C_SRCS__QUOTED += \
-"../main.c" 
+"../main.c" \
+"../tiny_printf.c" 
 
 
