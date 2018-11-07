@@ -10,11 +10,13 @@
  *      P1.0 - P1.7
  */
 
-// PWM sample code: https://www.kompulsa.com/example-code-msp430-pwm/
-
 #include <msp430.h> 
 #include <stdlib.h>
 
+// RGB LED pins
+#define RED_LED     BIT2    // P1.2
+#define GREEN_LED   BIT1    // P2.1
+#define BLUE_LED    BIT4    // P2.4
 
 // increase MAX_RAND and LED_ON_FACTOR to make LED flicker slower
 #define MAX_RAND 20
@@ -62,12 +64,12 @@ int main(void)
 void pwmInit(void)
 {
     // set up port 1
-    P1DIR |= BIT2;
-    P1SEL |= BIT2;  // red 1.2 pwm
+    P1DIR |= RED_LED;
+    P1SEL |= RED_LED;  // red 1.2 pwm
     // set up port 2
-    P2DIR |= BIT1 + BIT4;
-    P2SEL |= BIT1;  // green 2.1 pwm
-    P2OUT &= ~BIT4;  // blue 2.4 off
+    P2DIR |= GREEN_LED + BLUE_LED;
+    P2SEL |= GREEN_LED;  // green 2.1 pwm
+    P2OUT &= ~BLUE_LED;  // blue 2.4 off
 
     TA0CCR0 = 1000;
     TA0CCTL1 = OUTMOD_7;    // OUTMOD_7: reset/set (output set low when CCRx reached, high when CCR0 reached)
