@@ -3,8 +3,8 @@
 
 /* Pin descriptions:
  *  PWM:
- *      Timer A0 CCR1: P1.2 or P1.6
- *      Timer A1 CCR1: P2.1 or P2.2
+ *      Timer A0 CCR1: P1.2 or P1.6 red
+ *      Timer A1 CCR1: P2.1 or P2.2 green
  *      Timer A1 CCR2: P2.4 or P2.5
  *  Analog input:
  *      P1.0 - P1.7
@@ -24,6 +24,9 @@
 #define MAX_RAND 20
 #define LED_ON_FACTOR 18
 
+#define ADC_BUSY        ADC10CTL1 & BUSY
+#define ADC_ARRAY_SIZE  128
+
 // pwm = 0 on 100%, 100 on 0%
 // flame color: red 5, green 90, blue 100
 
@@ -42,24 +45,29 @@ void flameColor(int red_percent, int green_percent);
  */
 void pwmInit(void);
 
+void portInterruptInit(void);
+void adcInit(void);
+int readA0(void);
+
 volatile int interrupt_count = 0;
 
 int main(void)
 {
     int red_duty = 95, green_duty = 5;
     int rand_on;
+    unsigned int adc_value = 0;
+    unsigned int adc_history[ADC_ARRAY_SIZE] = {0}, adc_count = 0, adc_average = 0;
+    unsigned long adc_sum = 0;
 
 	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
 	
 	P1DIR |= BUILT_IN_LED2;
 
-	P1IE |= BIT0;               // enable interrupt from P1.0
-	P1IES |= BIT0;              // set flag on high-to-low transition
-	P1IFG &= ~BIT0;            // clear flag
+	portInterruptInit();
+	//adcInit();
+	pwmInit();
 
 	__enable_interrupt();
-
-	pwmInit();
 
 	while(1)
 	{
@@ -68,6 +76,26 @@ int main(void)
 	    flameColor(red_duty, green_duty);
 
 	    if(rand_on > LED_ON_FACTOR) flameColor(0, 0);
+
+
+/* ANALOG CODE
+	    adc_value = (unsigned)readA0();
+	    adc_sum += adc_value;
+
+	    if(adc_count >= ADC_ARRAY_SIZE)
+	    {
+	        adc_count = 0;
+	        adc_average = adc_sum / ADC_ARRAY_SIZE;
+	        if(adc_average > 350)
+	        {
+	            P1OUT ^= BUILT_IN_LED2;
+	        }
+	        adc_sum = 0;
+	    }
+	    adc_history[adc_count++] = adc_value;
+*/
+
+	    //P1OUT ^= BUILT_IN_LED2;     // heart beat
 	}
 
 	return 0;
@@ -104,6 +132,14 @@ void flameColor(int red_percent, int green_percent)
     TA1CCR1 = green_percent * 10;   // green_percent/100 * 1000
 }
 
+void portInterruptInit(void)
+{
+    P1IE |= BIT0;               // enable interrupt from P1.0
+    P1IES |= BIT0;              // set flag on high-to-low transition
+    P1IFG &= ~BIT0;            // clear flag
+
+}
+
 #pragma vector=PORT1_VECTOR
 __interrupt void Port_1(void)
 {
@@ -114,4 +150,21 @@ __interrupt void Port_1(void)
 
     P1OUT ^= BUILT_IN_LED2;
     P1IFG &= ~BIT0;
+}
+
+void adcInit(void)
+{
+    ADC10CTL0 = ADC10SHT_2 | ADC10ON;
+    ADC10CTL1 = 0x0000;
+    while(ADC_BUSY);
+    ADC10AE0 |= BIT0;
+}
+
+int readA0(void)
+{
+    ADC10CTL0 &= ~ENC;
+    while(ADC_BUSY);
+    ADC10CTL0 |= (ENC | ADC10SC);
+    while(ADC_BUSY);
+    return ADC10MEM;
 }
