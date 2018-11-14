@@ -48,19 +48,16 @@ void flameColor(int red_percent, int green_percent);
  */
 void pwmInit(void);
 
-void portInterruptInit(void);
 void adcInit(void);
 int readA0(void);
 
-volatile int interrupt_count = 0;
-volatile int interrupt_flag = 0;
 volatile unsigned long long cycles = 0;
 
 int main(void)
 {
     int red_duty = 95, green_duty = 5;
     int rand_on;
-    unsigned long long cycle_count = 0;
+    unsigned long long tilt_cycle_count = 0;
     unsigned int adc_value = 0;
     unsigned int adc_history[ADC_ARRAY_SIZE] = {0}, adc_count = 0, adc_average = 0;
     unsigned long adc_sum = 0;
@@ -69,11 +66,9 @@ int main(void)
 	
 	P1DIR |= BUILT_IN_LED2;
 
-	//portInterruptInit();
 	//adcInit();
 	pwmInit();
 
-	__enable_interrupt();
 
 	while(1)
 	{
@@ -81,11 +76,11 @@ int main(void)
 
 	    // count number of cycles tilt sensor is active for
 	    // helps avoid turning off LED when sensor is activated on drop
-	    if(P1IN & TILT) cycle_count++;
-	    else cycle_count = 0;
+	    if(P1IN & TILT) tilt_cycle_count++;
+	    else tilt_cycle_count = 0;
 
 	    // turn off LED based on random value or tilt sensor
-	    if( (rand_on > LED_ON_FACTOR) || (cycle_count > 100) ) flameColor(0, 0);
+	    if( (rand_on > LED_ON_FACTOR) || (tilt_cycle_count > 100) ) flameColor(0, 0);
 	    else flameColor(red_duty, green_duty);
 
 
@@ -143,26 +138,6 @@ void flameColor(int red_percent, int green_percent)
 {
     TA0CCR1 = red_percent * 10;     // red_percent/100 * 1000
     TA1CCR1 = green_percent * 10;   // green_percent/100 * 1000
-}
-
-void portInterruptInit(void)
-{
-    P1IE |= TILT;               // enable interrupt from P1.0
-    P1IES |= TILT;              // set flag on high-to-low transition
-    P1IFG &= ~TILT;            // clear flag
-
-}
-
-#pragma vector=PORT1_VECTOR
-__interrupt void Port_1(void)
-{
-    // TODO: ISR not being run... interrupt not thrown? Check voltages, may be outside logic level
-    // LED would toggle (ISR would run) when probing pins with multimeter
-
-    interrupt_count++;
-    interrupt_flag = 1;
-
-    P1IFG &= ~TILT;
 }
 
 void adcInit(void)
