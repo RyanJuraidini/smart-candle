@@ -28,7 +28,7 @@
 #define LED_ON_FACTOR 18
 
 #define ADC_BUSY        ADC10CTL1 & BUSY
-#define ADC_ARRAY_SIZE  128
+#define ADC_ARRAY_SIZE  64
 
 // pwm = 0 on 100%, 100 on 0%
 // flame color: red 5, green 90, blue 100
@@ -66,13 +66,14 @@ int main(void)
 	
 	P1DIR |= BUILT_IN_LED2;
 
-	//adcInit();
+	adcInit();
 	pwmInit();
 
 
 	while(1)
 	{
-	    rand_on = rand() % MAX_RAND;  // increase mod value here to make flicker less
+	    // generate random value for LED flicker
+	    rand_on = rand() % MAX_RAND;
 
 	    // count number of cycles tilt sensor is active for
 	    // helps avoid turning off LED when sensor is activated on drop
@@ -83,25 +84,18 @@ int main(void)
 	    if( (rand_on > LED_ON_FACTOR) || (tilt_cycle_count > 100) ) flameColor(0, 0);
 	    else flameColor(red_duty, green_duty);
 
-
-/* ANALOG CODE
+	    // read mic value
 	    adc_value = (unsigned)readA0();
-	    adc_sum += adc_value;
 
-	    if(adc_count >= ADC_ARRAY_SIZE)
-	    {
-	        adc_count = 0;
-	        adc_average = adc_sum / ADC_ARRAY_SIZE;
-	        if(adc_average > 350)
-	        {
-	            P1OUT ^= BUILT_IN_LED2;
-	        }
+	    if(adc_count >= ADC_ARRAY_SIZE){
+	        adc_average = adc_sum / adc_count;
 	        adc_sum = 0;
+	        adc_count = 0;
 	    }
 	    adc_history[adc_count++] = adc_value;
-*/
+	    adc_sum += adc_value;
 
-	    //P1OUT ^= BUILT_IN_LED2;     // heart beat
+	    if(adc_average > 80) P1OUT &= ~BUILT_IN_LED2;
 
 	    cycles++;
 	}
@@ -114,6 +108,7 @@ void pwmInit(void)
     // set up port 1
     P1DIR |= RED_LED;
     P1SEL |= RED_LED;  // red 1.2 pwm
+
     // set up port 2
     P2DIR |= GREEN_LED + BLUE_LED;
     P2SEL |= GREEN_LED;  // green 2.1 pwm
