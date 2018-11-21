@@ -13,7 +13,8 @@
 #include <msp430.h> 
 #include <stdlib.h>
 
-#define BUILT_IN_LED2 BIT6  // P1.6
+#define BUILTIN_LED2    BIT6  // P1.6
+#define BUILTIN_S2      BIT3  // P1.3
 
 // RGB LED pins
 #define RED_LED     BIT2    // P1.2
@@ -28,7 +29,8 @@
 #define LED_ON_FACTOR 18
 
 #define ADC_BUSY        ADC10CTL1 & BUSY
-#define ADC_ARRAY_SIZE  64
+#define MIC_SAMPLE_SIZE 150
+#define MIC_THRESHOLD   380
 
 // pwm = 0 on 100%, 100 on 0%
 // flame color: red 5, green 90, blue 100
@@ -47,11 +49,12 @@ void flameColor(int red_percent, int green_percent);
  * @return none
  */
 void pwmInit(void);
-
 void adcInit(void);
 int readA0(void);
+void switchInit(void);
 
 volatile unsigned long long cycles = 0;
+volatile int led_status = 1; // 1 if on, 0 if off
 
 int main(void)
 {
@@ -59,43 +62,61 @@ int main(void)
     int rand_on;
     unsigned long long tilt_cycle_count = 0;
     unsigned int adc_value = 0;
-    unsigned int adc_history[ADC_ARRAY_SIZE] = {0}, adc_count = 0, adc_average = 0;
+    // unsigned int adc_history[MIC_SAMPLE_SIZE] = {0};
+    unsigned int adc_count = 0, adc_average = 0;
     unsigned long adc_sum = 0;
 
 	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
 	
-	P1DIR |= BUILT_IN_LED2;
+	P1DIR |= BUILTIN_LED2;
 
 	adcInit();
 	pwmInit();
-
+	switchInit();
+	__enable_interrupt();
 
 	while(1)
 	{
-	    // generate random value for LED flicker
-	    rand_on = rand() % MAX_RAND;
+	    if(led_status == 1)
+	    {
+	        // ** led on **
+            // generate random value for LED flicker
+            rand_on = rand() % MAX_RAND;
 
-	    // count number of cycles tilt sensor is active for
-	    // helps avoid turning off LED when sensor is activated on drop
-	    if(P1IN & TILT) tilt_cycle_count++;
-	    else tilt_cycle_count = 0;
+            // count number of cycles tilt sensor is active for
+            // helps avoid turning off LED when sensor is activated on drop
+            if(P1IN & TILT) tilt_cycle_count++;
+            else tilt_cycle_count = 0;
 
-	    // turn off LED based on random value or tilt sensor
-	    if( (rand_on > LED_ON_FACTOR) || (tilt_cycle_count > 100) ) flameColor(0, 0);
-	    else flameColor(red_duty, green_duty);
+            // turn off LED based on random value or tilt sensor
+            if( (rand_on > LED_ON_FACTOR) || (tilt_cycle_count > 100) ) flameColor(0, 0);
+            // or set correct pwm
+            else flameColor(red_duty, green_duty);
 
-	    // read mic value
-	    adc_value = (unsigned)readA0();
+            // read mic value
+            adc_value = (unsigned int)readA0();
 
-	    if(adc_count >= ADC_ARRAY_SIZE){
-	        adc_average = adc_sum / adc_count;
-	        adc_sum = 0;
-	        adc_count = 0;
+            if(adc_count >= MIC_SAMPLE_SIZE){
+                adc_average = adc_sum / adc_count;
+                // check if blow was strong enough
+                // turn off candle if it is
+                if(adc_average > MIC_THRESHOLD)
+                {
+                    led_status = 0;
+                }
+                adc_sum = 0;
+                adc_count = 0;
+            }
+            //adc_history[adc_count++] = adc_value;
+            adc_count++;
+            adc_sum += adc_value;
+
 	    }
-	    adc_history[adc_count++] = adc_value;
-	    adc_sum += adc_value;
-
-	    if(adc_average > 80) P1OUT &= ~BUILT_IN_LED2;
+	    else
+	    {
+	        // ** led off **
+	        flameColor(0, 0);
+	    }
 
 	    cycles++;
 	}
@@ -150,4 +171,21 @@ int readA0(void)
     ADC10CTL0 |= (ENC | ADC10SC);
     while(ADC_BUSY);
     return ADC10MEM;
+}
+
+void switchInit(void)
+{
+    P1DIR &= ~BUILTIN_S2;
+    P1REN |= BUILTIN_S2;
+    P1IE |= BUILTIN_S2;
+    P1IES |= BUILTIN_S2;
+    P1IFG &= ~BUILTIN_S2;
+}
+
+#pragma vector=PORT1_VECTOR
+__interrupt void Port_1(void)
+{
+    led_status = 1;
+    P1OUT ^= BUILTIN_LED2;
+    P1IFG &= ~BUILTIN_S2;
 }
