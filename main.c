@@ -30,12 +30,14 @@
 
 #define ADC_BUSY        ADC10CTL1 & BUSY
 #define MIC_SAMPLE_SIZE 150
-#define MIC_THRESHOLD   380
+#define MIC_THRESHOLD       430     // adjusts when LED turns off
+#define FLICKER_THRESHOLD   200     // adjusts when LED flicker from weak breath
+#define EXTRA_FLICKER       15      // adjusts amount of flicker (higher = more flicker)
 
 // pwm = 0 on 100%, 100 on 0%
 // flame color: red 5, green 90, blue 100
 
-/**
+/** flameColor
  * @summary adjusts pwm wave of red and green pins of RGB
  * @param red_percent = red led duty cycle
  * @param green_percent = green led duty cycle
@@ -43,14 +45,32 @@
  */
 void flameColor(int red_percent, int green_percent);
 
-/**
+/** pwmInit
  * @summary initializes pwm pins and timer modules used to generate waves
  * @param none
  * @return none
  */
 void pwmInit(void);
+
+/** adcInit
+ * @summary initializes ADC10 analog to digital converter module
+ * @param none
+ * @return non
+ */
 void adcInit(void);
+
+/** readA0
+ * @summary activates the ADC to read the analog value on pin P1.0
+ * @param none
+ * @return 10-bit integer value from ADC
+ */
 int readA0(void);
+
+/** switchInit
+ * @summary initializes built-in switch S2 with interrupt capability
+ * @param none
+ * @return none
+ */
 void switchInit(void);
 
 volatile unsigned long long cycles = 0;
@@ -65,6 +85,7 @@ int main(void)
     // unsigned int adc_history[MIC_SAMPLE_SIZE] = {0};
     unsigned int adc_count = 0, adc_average = 0;
     unsigned long adc_sum = 0;
+    unsigned int led_extra_flicker_cycles = 0;
 
 	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
 	
@@ -80,8 +101,17 @@ int main(void)
 	    if(led_status == 1)
 	    {
 	        // ** led on **
-            // generate random value for LED flicker
-            rand_on = rand() % MAX_RAND;
+	        if(led_extra_flicker_cycles > 0)
+	        {
+	            // flicker led if last breath was too weak to turn off
+	            led_extra_flicker_cycles--;
+	            rand_on = rand() % (MAX_RAND + (led_extra_flicker_cycles % EXTRA_FLICKER));
+	        }
+	        else
+	        {
+                // generate random value for LED flicker
+                rand_on = rand() % MAX_RAND;
+	        }
 
             // count number of cycles tilt sensor is active for
             // helps avoid turning off LED when sensor is activated on drop
@@ -102,7 +132,13 @@ int main(void)
                 // turn off candle if it is
                 if(adc_average > MIC_THRESHOLD)
                 {
+                    // turn off led
                     led_status = 0;
+                }
+                else if(adc_average > FLICKER_THRESHOLD)
+                {
+                    // make candle flicker more
+                    led_extra_flicker_cycles = MIC_SAMPLE_SIZE;
                 }
                 adc_sum = 0;
                 adc_count = 0;
