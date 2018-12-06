@@ -19,7 +19,7 @@
 // RGB LED pins
 #define RED_LED     BIT2    // P1.2
 #define GREEN_LED   BIT1    // P2.1
-#define BLUE_LED    BIT4    // P2.4
+//#define BLUE_LED    BIT4    // P2.4
 
 // TILT SENSOR
 #define TILT    BIT4        // P1.4
@@ -29,10 +29,14 @@
 #define LED_ON_FACTOR 18
 
 #define ADC_BUSY        ADC10CTL1 & BUSY
-#define MIC_SAMPLE_SIZE 150
-#define MIC_THRESHOLD       430     // adjusts when LED turns off
-#define FLICKER_THRESHOLD   200     // adjusts when LED flicker from weak breath
+#define MIC_SAMPLE_SIZE 150     //150
+#define MIC_THRESHOLD       430     //430// adjusts when LED turns off
+#define FLICKER_THRESHOLD   100     //200// adjusts when LED flicker from weak breath
 #define EXTRA_FLICKER       15      // adjusts amount of flicker (higher = more flicker)
+
+#define SHAKE_SEQUENCE_TIMEOUT  600    //500 // adjusts max time between shakes
+#define SINGLE_SHAKE_TIME       350    //250 // adjusts time a single shake takes (up then down)
+                                        // 1000 ~= 1 second
 
 // pwm = 0 on 100%, 100 on 0%
 // flame color: red 5, green 90, blue 100
@@ -75,17 +79,19 @@ void switchInit(void);
 
 volatile unsigned long long cycles = 0;
 volatile int led_status = 1; // 1 if on, 0 if off
+volatile int tilt_flag = 0; // 1 on interrupt, cleared 0 in main loop
 
 int main(void)
 {
     int red_duty = 95, green_duty = 5;
     int rand_on;
-    unsigned long long tilt_cycle_count = 0;
     unsigned int adc_value = 0;
-    // unsigned int adc_history[MIC_SAMPLE_SIZE] = {0};
     unsigned int adc_count = 0, adc_average = 0;
     unsigned long adc_sum = 0;
     unsigned int led_extra_flicker_cycles = 0;
+    unsigned long tilt_disabled_count = 0;
+    int tilt_count = 0;
+    unsigned long long last_tilt_time = 0;
 
 	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
 	
@@ -94,6 +100,12 @@ int main(void)
 	adcInit();
 	pwmInit();
 	switchInit();
+
+	P1DIR &= ~TILT;
+	P1IE |= TILT;
+	P1IES |= TILT;
+	P1IFG &= ~TILT;
+
 	__enable_interrupt();
 
 	while(1)
@@ -106,20 +118,17 @@ int main(void)
 	            // flicker led if last breath was too weak to turn off
 	            led_extra_flicker_cycles--;
 	            rand_on = rand() % (MAX_RAND + (led_extra_flicker_cycles % EXTRA_FLICKER));
+	            green_duty = 3;
 	        }
 	        else
 	        {
                 // generate random value for LED flicker
                 rand_on = rand() % MAX_RAND;
+                green_duty = 5;
 	        }
 
-            // count number of cycles tilt sensor is active for
-            // helps avoid turning off LED when sensor is activated on drop
-            if(P1IN & TILT) tilt_cycle_count++;
-            else tilt_cycle_count = 0;
-
             // turn off LED based on random value or tilt sensor
-            if( (rand_on > LED_ON_FACTOR) || (tilt_cycle_count > 100) ) flameColor(0, 0);
+            if( (rand_on > LED_ON_FACTOR) ) flameColor(0, 0);
             // or set correct pwm
             else flameColor(red_duty, green_duty);
 
@@ -143,16 +152,60 @@ int main(void)
                 adc_sum = 0;
                 adc_count = 0;
             }
-            //adc_history[adc_count++] = adc_value;
             adc_count++;
             adc_sum += adc_value;
-
 	    }
 	    else
 	    {
 	        // ** led off **
 	        flameColor(0, 0);
+	        // add delay to match time of bigger 'if' statement
+	        // this is needed for shake calibration to work in both conditions
+	        __delay_cycles(700);
 	    }
+
+	    // ** shake detection **
+	    if(tilt_flag)
+        {
+            // disable tilt switch interrupts for 0.2 seconds
+            tilt_disabled_count = SINGLE_SHAKE_TIME;
+            P1IE &= ~TILT;
+            P1IFG &= ~TILT;
+            // acknowledge shake
+            tilt_flag = 0;
+            tilt_count++;
+            // mark time of tilt
+            last_tilt_time = cycles;
+        }
+
+        if(tilt_disabled_count)
+        {
+            tilt_disabled_count--;
+            // enable interrupt if counter is done
+            if(tilt_disabled_count < 1)
+            {
+                // re-enable tilt sensor interrupts
+                // clear flags since they may have been set when modifying registers
+                P1IFG &= ~TILT;
+                P1IE |= TILT;
+                P1IFG &= ~TILT;
+                // check if there has been 3 shakes
+                if(tilt_count >= 3)
+                {
+                    if(led_status == 0) led_status = 1;
+                    else if(led_status == 1) led_status = 0;
+                    tilt_count = 0;
+                }
+            }
+        }
+
+        // check time between shakes to see if sequence timed out
+        if(cycles - last_tilt_time > SHAKE_SEQUENCE_TIMEOUT)
+        {
+            tilt_count = 0;
+        }
+
+        // ** end shake detection **
 
 	    cycles++;
 	}
@@ -167,9 +220,9 @@ void pwmInit(void)
     P1SEL |= RED_LED;  // red 1.2 pwm
 
     // set up port 2
-    P2DIR |= GREEN_LED + BLUE_LED;
+    P2DIR |= GREEN_LED;  // + BLUE_LED;
     P2SEL |= GREEN_LED;  // green 2.1 pwm
-    P2OUT &= ~BLUE_LED;  // blue 2.4 off
+    //P2OUT &= ~BLUE_LED;  // blue 2.4 off
 
     TA0CCR0 = 1000;
     TA0CCTL1 = OUTMOD_7;    // OUTMOD_7: reset/set (output set low when CCRx reached, high when CCR0 reached)
@@ -221,7 +274,17 @@ void switchInit(void)
 #pragma vector=PORT1_VECTOR
 __interrupt void Port_1(void)
 {
-    led_status = 1;
-    P1OUT ^= BUILTIN_LED2;
-    P1IFG &= ~BUILTIN_S2;
+    if(P1IFG & BUILTIN_S2)
+    {
+        led_status = 1;
+        P1IFG &= ~BUILTIN_S2;
+    }
+
+    if(P1IFG & TILT)
+    {
+        tilt_flag = 1;
+        P1OUT ^= BUILTIN_LED2;
+        P1IFG &= ~TILT;
+    }
+
 }
